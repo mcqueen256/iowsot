@@ -39,6 +39,7 @@
 
     div#history {
       list-style-type: none;
+      overflow: hidden;
     }
 
     span.key {
@@ -63,7 +64,6 @@
 
 <body>
   <div id="history"></div>
-  <span>a<sup><i class="nf nf-oct-x"></i>15</sup></span>
 </body>
 
 <script>
@@ -299,7 +299,7 @@
     console.log(textual_symbol);
 
     if (textual_symbol.startsWith("nf")) {
-      textual_symbol = `<i class="nf ${textual_symbol}"></i>`
+      textual_symbol = `<i class="nf ${textual_symbol}" style="margin-left:0.2rem;margin-right:0.2rem;"></i>`
     }
 
     // If fist char or char is different.
@@ -318,11 +318,14 @@
     }
 
     let counterHTML = "";
-
+    let ctrlHTML = "";
     if (record.count > 1) {
       counterHTML = `<sup><i class="nf nf-oct-x"></i>${record.count}</sup> `;
     }
-    record.span.innerHTML = `${record.textual_symbol}${counterHTML}`;
+    if (ctrl) {
+      ctrlHTML = `<sup><i class="nf nf-md-apple_keyboard_control" style="margin-left:0.2rem;"></i></sup>`;
+    }
+    record.span.innerHTML = `${ctrlHTML}${record.textual_symbol}${counterHTML}`;
   }
 
   function on_data(e) {
