@@ -1,0 +1,11 @@
+[package]
+name = "iowspt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.75"
+axum = { version = "0.6.20", features = ["ws"] }
+evdev = { version = "0.12.1", features = ["tokio"] }
+futures = "0.3.29"
+tokio = { version = "1.34.0", features = ["rt", "macros", "net"] }

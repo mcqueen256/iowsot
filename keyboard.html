@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<!-- A usable HTML template for input-history overlay using Browser Source and Websocket -->
+
+<!-- By: https://github.com/christiankyle-ching/ -->
+
+<head>
+  <meta charset="utf-8" />
+  <title>input-history Windows</title>
+  <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css" />
+
+  <style>
+    /* Zero out default values */
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      height: 100%;
+      position: relative;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-family: "Mononoki Nerd Font Mono";
+      font-size: 48px;
+      /* color: white; */
+      color: black;
+
+      position: absolute;
+      bottom: 0;
+      overflow: hidden;
+    }
+
+    sup {
+      font-size: 32px;
+    }
+
+    div#history {
+      list-style-type: none;
+    }
+
+    span.key {
+      display: inline-flex;
+      border-radius: 0.25em;
+      /* Override text height, otherwise it uses more vertical space and
+           keys with text in them are higher than ones with just icons. */
+      line-height: 1em;
+
+      padding: 0.25em;
+
+      background-color: rgba(0, 0, 0, 0.75);
+      white-space: nowrap;
+    }
+
+    span.key div {
+      display: inline-flex;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="history"></div>
+  <span>a<sup><i class="nf nf-oct-x"></i>15</sup></span>
+</body>
+
+<script>
+
+  let KEYCODES = {
+    "KEY_ESC": "nf-md-keyboard_esc",
+    "KEY_F1": "nf-md-keyboard_f1",
+    "KEY_F2": "nf-md-keyboard_f2",
+    "KEY_F3": "nf-md-keyboard_f3",
+    "KEY_F4": "nf-md-keyboard_f4",
+    "KEY_F5": "nf-md-keyboard_f5",
+    "KEY_F6": "nf-md-keyboard_f6",
+    "KEY_F7": "nf-md-keyboard_f7",
+    "KEY_F8": "nf-md-keyboard_f8",
+    "KEY_F9": "nf-md-keyboard_f9",
+    "KEY_F10": "nf-md-keyboard_f10",
+    "KEY_F11": "nf-md-keyboard_f11",
+    "KEY_F12": "nf-md-keyboard_f12",
+    "KEY_F13": "nf-md-keyboard_f13",
+    "KEY_F14": "nf-md-keyboard_f14",
+    "KEY_F15": "nf-md-keyboard_f15",
+    "KEY_F16": "nf-md-keyboard_f16",
+    "KEY_F17": "nf-md-keyboard_f17",
+    "KEY_F18": "nf-md-keyboard_f18",
+    "KEY_F19": "nf-md-keyboard_f19",
+    "KEY_F20": "nf-md-keyboard_f20",
+    "KEY_F21": "nf-md-keyboard_f21",
+    "KEY_F22": "nf-md-keyboard_f22",
+    "KEY_F23": "nf-md-keyboard_f23",
+    "KEY_F24": "nf-md-keyboard_f24",
+    "KEY_GRAVE": ["`", "~"],
+    "KEY_1": ["1", "!"],
+    "KEY_2": ["2", "@"],
+    "KEY_3": ["3", "#"],
+    "KEY_4": ["4", "$"],
+    "KEY_5": ["5", "%"],
+    "KEY_6": ["6", "^"],
+    "KEY_7": ["7", "&"],
+    "KEY_8": ["8", "*"],
+    "KEY_9": ["9", "("],
+    "KEY_0": ["0", ")"],
+    "KEY_MINUS": ["-", "_"],
+    "KEY_EQUAL": ["=", "+"],
+    "KEY_BACKSPACE": "nf-md-keyboard_backspace",
+    "KEY_TAB": "nf-md-keyboard_tab",
+    "KEY_CAPSLOCK": "nf_md_keyboard_caps",
+    "KEY_A": ["a", "A"],
+    "KEY_B": ["b", "B"],
+    "KEY_C": ["c", "C"],
+    "KEY_D": ["d", "D"],
+    "KEY_E": ["e", "E"],
+    "KEY_F": ["f", "F"],
+    "KEY_G": ["g", "G"],
+    "KEY_H": ["h", "H"],
+    "KEY_I": ["i", "I"],
+    "KEY_J": ["j", "J"],
+    "KEY_K": ["k", "K"],
+    "KEY_L": ["l", "L"],
+    "KEY_M": ["m", "M"],
+    "KEY_N": ["n", "N"],
+    "KEY_O": ["o", "O"],
+    "KEY_P": ["p", "P"],
+    "KEY_Q": ["q", "Q"],
+    "KEY_R": ["r", "R"],
+    "KEY_S": ["s", "S"],
+    "KEY_T": ["t", "T"],
+    "KEY_U": ["u", "U"],
+    "KEY_V": ["v", "V"],
+    "KEY_W": ["w", "W"],
+    "KEY_X": ["x", "X"],
+    "KEY_Y": ["y", "Y"],
+    "KEY_Z": ["z", "Z"],
+    "KEY_LEFTBRACE": ["[", "{"],
+    "KEY_RIGHTBRACE": ["]", "}"],
+    "KEY_BACKSLASH": ["\\", "|"],
+
+    "KEY_SEMICOLON": [";", ":"],
+    "KEY_APOSTROPHE": ["'", "\""],
+    "KEY_ENTER": "nf-md-keyboard_return",
+    "KEY_COMMA": [",", "<"],
+    "KEY_DOT": [".", ">"],
+    "KEY_SLASH": ["/", "?"],
+    "KEY_SPACE": "nf-md-keyboard_space",
+    "KEY_INSERT": "nf-md-console_line",
+    "KEY_DELETE": "nf-md-delete",
+    "KEY_HOME": "nf-oct-move_to_start",
+    "KEY_END": "nf-oct-move_to_end",
+    "KEY_PAGEUP": "nf-oct-move_to_top",
+    "KEY_PAGEDOWN": "nf-oct-move_to_bottom",
+    "KEY_UP": "nf-fa-arrow_up",
+    "KEY_LEFT": "nf-fa-arrow_left",
+    "KEY_RIGHT": "nf-fa-arrow_right",
+    "KEY_DOWN": "nf-fa-arrow_down",
+    "KEY_KPSLASH": ["/"],
+    "KEY_KPASTERISK": ["*"],
+    "KEY_KPMINUS": ["-"],
+    "KEY_KPPLUS": ["+"],
+    "KEY_KPENTER": "nf-md-keyboard_return",
+    "KEY_KPDOT": ["."],
+    "KEY_KP1": ["1"],
+    "KEY_KP2": ["2"],
+    "KEY_KP3": ["3"],
+    "KEY_KP4": ["4"],
+    "KEY_KP5": ["5"],
+    "KEY_KP6": ["6"],
+    "KEY_KP7": ["7"],
+    "KEY_KP8": ["8"],
+    "KEY_KP9": ["9"],
+    "KEY_KP0": ["0"],
+    "KEY_KP_COMMA": [","],
+    "KEY_LEFTSHIFT": "nf-md-keyboard_shift",
+    "KEY_RIGHTSHIFT": "nf-md-keyboard_shift",
+    "KEY_LEFTCTRL": "nf-md-keyboard_control",
+    "KEY_RIGHTCTRL": "nf-md-keyboard_control",
+  };
+
+
+  function getKeyHTML(keycode) {
+    if (!Object.hasOwnProperty(KEYCODES, keycode)) {
+      return;
+    }
+    var key = KEYCODES[intcode];
+
+    if (!!key) {
+      var icon = KEYICONS[intcode];
+
+      if (!!icon) {
+        return icon.cloneNode(true).outerHTML;
+      } else {
+        // return alias if present
+        return key[1] !== "" ? key[1] : key[0];
+      }
+    } else {
+      return "";
+    }
+  }
+
+  // #region DOM Utils
+
+  /**
+   * Gets a {Set} of keycodes, wraps each item in span.key, and joins them by a + (separator)
+   *
+   * @returns {HTMLElement} <p> element of key combination
+   */
+  function getKeyCombinationElement(setOfKeycodes = new Set()) {
+    try {
+      var innerHTMLofKeys = Array.from(setOfKeycodes)
+        .map((keycode) => getKeyHTML(keycode))
+        // Filter out non-existing keys in KEYCODES
+        .filter((html) => html !== "");
+
+      // Build innerHTMl for the key combination
+      var innerHTMLOfKeyCombination = innerHTMLofKeys
+        .map(
+          (innerHTML) =>
+            createElementWithClass("span", innerHTML, ["key"]).outerHTML
+        )
+        .join(
+          createElementWithClass("span", SEPARATOR, ["separator"]).outerHTML
+        );
+
+      return createElementWithClass("p", innerHTMLOfKeyCombination, [
+        "key-combination",
+      ]);
+    } catch (e) {
+      console.error(e);
+      return "";
+    }
+  }
+
+  /**
+   * Wraps an HTML string of a key with span
+   *
+   * @returns {HTMLElement} HTML Element created with classes
+   */
+  function createElementWithClass(element, innerHTML = "", classList = []) {
+    var el = document.createElement(element);
+    el.innerHTML = innerHTML;
+    el.classList.add(...classList);
+    return el;
+  }
+
+  var HISTORY_MAX = 10;
+
+  // #endregion
+
+  // History
+  var _historyDiv = document.getElementById("history");
+  var _lcrtl = 0;
+  var _rcrtl = 0;
+  var _lshift = 0;
+  var _rshift = 0;
+  var _history = [];
+
+  function onKeyEvent(data) {
+    if (data.key == 'KEY_LEFTSHIFT') {
+      _lshift = data.value;
+      return;
+    } else if (data.key == 'KEY_RIGHTSHIFT') {
+      _rshift = data.value;
+      return;
+    } else if (data.key == 'KEY_LEFTCTRL') {
+      _lcrtl = data.value;
+      return;
+    } else if (data.key == "KEY_RIGHTCTRL") {
+      _rcrtl = data.value;
+      return;
+    }
+
+    let ctrl = (_lcrtl + _rcrtl) > 0 ? 1 : 0;
+    let shift = (_lshift + _rshift) > 0 ? 1 : 0;
+
+    // if (!Object.hasOwnProperty(KEYCODES, data.key)) {
+    //   return;
+    // }
+
+    if (data.value == 0) {
+      return;
+    }
+
+    let keymap = KEYCODES[data.key];
+
+    let textual_symbol;
+    if (Array.isArray(keymap)) {
+      if (shift) {
+        textual_symbol = keymap[keymap.length - 1];
+      } else {
+        textual_symbol = keymap[0];
+      }
+    } else if (typeof keymap === 'string') {
+      textual_symbol = keymap;
+    }
+    console.log(textual_symbol);
+
+    if (textual_symbol.startsWith("nf")) {
+      textual_symbol = `<i class="nf ${textual_symbol}"></i>`
+    }
+
+    // If fist char or char is different.
+    let record;
+    if (_history.length === 0 || _history[_history.length - 1].textual_symbol !== textual_symbol) {
+      record = {
+        textual_symbol: textual_symbol,
+        count: 1,
+        span: document.createElement("span")
+      };
+      _historyDiv.prepend(record.span);
+      _history.push(record);
+    } else {
+      record = _history[_history.length - 1];
+      record.count += 1;
+    }
+
+    let counterHTML = "";
+
+    if (record.count > 1) {
+      counterHTML = `<sup><i class="nf nf-oct-x"></i>${record.count}</sup> `;
+    }
+    record.span.innerHTML = `${record.textual_symbol}${counterHTML}`;
+  }
+
+  function on_data(e) {
+    // Since data is in string, parse first
+    var data = JSON.parse(e.data);
+
+    // Show for browser source
+    onKeyEvent(data);
+  }
+
+  function start_websocket() {
+    var ws = new WebSocket("ws://localhost:55238/ws");
+
+    ws.onmessage = on_data;
+
+    ws.onerror = (e) => {
+      console.log("WebSocket error: ");
+      console.error(e);
+    };
+
+    ws.onclose = () => {
+      // connection closed, discard old websocket and create a new one in 5s
+      ws = null;
+      setTimeout(start_websocket, 2000);
+    };
+  }
+
+  start_websocket();
+</script>
+
+</html>
