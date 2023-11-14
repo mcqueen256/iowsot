@@ -13,20 +13,20 @@ use tokio::time::{self, Duration};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx1) = broadcast::channel(16);
-    // let rx2 = tx.subscribe();
+    let (tx, _) = broadcast::channel(16);
+    let tx: Arc<Mutex<broadcast::Sender<KeyEvent>>> = Arc::new(Mutex::new(tx));
     let enable_key_sharing = Arc::new(Mutex::new(EnableKeySharing(true)));
     let device = pick_device();
     let kb_listener = tokio::spawn(keyboard_event_listener(
         device,
-        tx,
+        Arc::clone(&tx),
         Arc::clone(&enable_key_sharing),
     ));
-    let web_server = tokio::spawn(web_server(rx1, Arc::clone(&enable_key_sharing)));
-    // let io_listener = tokio::spawn(io_listener(Arc::clone(&enable_key_sharing)));
-    // let timeout_disabler = tokio::spawn(timeout_disabler(enable_key_sharing, rx2));
+    let web_server = tokio::spawn(web_server(Arc::clone(&tx), Arc::clone(&enable_key_sharing)));
+    let io_listener = tokio::spawn(io_listener(Arc::clone(&enable_key_sharing)));
+    let timeout_disabler = tokio::spawn(timeout_disabler(enable_key_sharing, Arc::clone(&tx)));
 
-    let ress = join_all([kb_listener, web_server]).await;
+    let ress = join_all([kb_listener, web_server, io_listener, timeout_disabler]).await;
     for res in ress.into_iter() {
         res??;
     }
@@ -39,37 +39,38 @@ struct EnableKeySharing(bool);
 
 async fn keyboard_event_listener(
     device: evdev::Device,
-    tx: broadcast::Sender<KeyEvent>,
+    tx: Arc<Mutex<broadcast::Sender<KeyEvent>>>,
     enable_key_sharing: Arc<Mutex<EnableKeySharing>>,
 ) -> anyhow::Result<()> {
     let mut events = device.into_event_stream()?;
     loop {
         let ev = events.next_event().await?;
-        if !enable_key_sharing.lock().await.0 {
-            print!(".");
-            use std::io::{self, Write};
-            io::stdout().flush()?;
-            continue;
-        }
         let kind = ev.kind();
         let key = match kind {
             InputEventKind::Key(k) => k,
             _ => continue,
         };
         let value = ev.value();
+        if !enable_key_sharing.lock().await.0 {
+            if value > 0 {
+                print!(".");
+            }
+            use std::io::{self, Write};
+            io::stdout().flush()?;
+            continue;
+        }
         println!("Event: key={key:?}, value={value}");
-        tx.send((key, value))?;
+        tx.lock().await.send((key, value))?;
     }
 }
 
 async fn web_server(
-    rx: broadcast::Receiver<KeyEvent>,
+    tx: Arc<Mutex<broadcast::Sender<KeyEvent>>>,
     enable_key_sharing: Arc<Mutex<EnableKeySharing>>,
 ) -> anyhow::Result<()> {
-    let rx = Arc::new(Mutex::new(rx));
     let app = Router::new()
         .route("/ws", get(ws_handler))
-        .with_state((rx, enable_key_sharing));
+        .with_state((tx, enable_key_sharing));
     let addr = SocketAddr::from(([127, 0, 0, 1], 55238));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -100,8 +101,9 @@ async fn io_listener(enable_key_sharing: Arc<Mutex<EnableKeySharing>>) -> anyhow
 /// disabled. Prevent password leaking.
 async fn timeout_disabler(
     enable_key_sharing: Arc<Mutex<EnableKeySharing>>,
-    mut rx: broadcast::Receiver<KeyEvent>,
+    tx: Arc<Mutex<broadcast::Sender<KeyEvent>>>,
 ) -> anyhow::Result<()> {
+    let mut rx = tx.lock().await.subscribe();
     loop {
         let timeout = time::sleep(Duration::from_secs(60));
         tokio::select! {
@@ -126,21 +128,22 @@ async fn timeout_disabler(
 }
 
 async fn ws_handler(
-    State((rx, enable_key_sharing)): State<(
-        Arc<Mutex<broadcast::Receiver<KeyEvent>>>,
+    State((tx, enable_key_sharing)): State<(
+        Arc<Mutex<broadcast::Sender<KeyEvent>>>,
         Arc<Mutex<EnableKeySharing>>,
     )>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, rx, enable_key_sharing))
+    ws.on_upgrade(move |socket| handle_socket(socket, tx, enable_key_sharing))
 }
 
 async fn handle_socket(
     mut socket: WebSocket,
-    rx: Arc<Mutex<broadcast::Receiver<KeyEvent>>>,
+    tx: Arc<Mutex<broadcast::Sender<KeyEvent>>>,
     enable_key_sharing: Arc<Mutex<EnableKeySharing>>,
 ) {
-    while let Ok((key, value)) = rx.lock().await.recv().await {
+    let mut rx = tx.lock().await.subscribe();
+    while let Ok((key, value)) = rx.recv().await {
         let paused = { !enable_key_sharing.lock().await.0 };
         let msg = format!("{{\"key\": \"{key:?}\", \"value\": {value}, \"paused\": {paused}}}");
         let _ = socket
