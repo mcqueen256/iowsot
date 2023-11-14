@@ -187,74 +187,7 @@
   };
 
 
-  function getKeyHTML(keycode) {
-    if (!Object.hasOwnProperty(KEYCODES, keycode)) {
-      return;
-    }
-    var key = KEYCODES[intcode];
-
-    if (!!key) {
-      var icon = KEYICONS[intcode];
-
-      if (!!icon) {
-        return icon.cloneNode(true).outerHTML;
-      } else {
-        // return alias if present
-        return key[1] !== "" ? key[1] : key[0];
-      }
-    } else {
-      return "";
-    }
-  }
-
-  // #region DOM Utils
-
-  /**
-   * Gets a {Set} of keycodes, wraps each item in span.key, and joins them by a + (separator)
-   *
-   * @returns {HTMLElement} <p> element of key combination
-   */
-  function getKeyCombinationElement(setOfKeycodes = new Set()) {
-    try {
-      var innerHTMLofKeys = Array.from(setOfKeycodes)
-        .map((keycode) => getKeyHTML(keycode))
-        // Filter out non-existing keys in KEYCODES
-        .filter((html) => html !== "");
-
-      // Build innerHTMl for the key combination
-      var innerHTMLOfKeyCombination = innerHTMLofKeys
-        .map(
-          (innerHTML) =>
-            createElementWithClass("span", innerHTML, ["key"]).outerHTML
-        )
-        .join(
-          createElementWithClass("span", SEPARATOR, ["separator"]).outerHTML
-        );
-
-      return createElementWithClass("p", innerHTMLOfKeyCombination, [
-        "key-combination",
-      ]);
-    } catch (e) {
-      console.error(e);
-      return "";
-    }
-  }
-
-  /**
-   * Wraps an HTML string of a key with span
-   *
-   * @returns {HTMLElement} HTML Element created with classes
-   */
-  function createElementWithClass(element, innerHTML = "", classList = []) {
-    var el = document.createElement(element);
-    el.innerHTML = innerHTML;
-    el.classList.add(...classList);
-    return el;
-  }
-
   var HISTORY_MAX = 16;
-
-  // #endregion
 
   // History
   var _historyDiv = document.getElementById("history");
@@ -267,7 +200,11 @@
   function onKeyEvent(data) {
 
     if (data.paused === true) {
-      // const body = document.body.setAttribute("class", "flashing-text");
+      let element = document.querySelector('div#history');
+      element.classList.add("flashing-text");
+      element.addEventListener('animationend', function () {
+        element.classList.remove('flashing-text');
+      }, { once: true });
       console.log("what?");
       return;
     }
@@ -288,10 +225,6 @@
 
     let ctrl = (_lcrtl + _rcrtl) > 0 ? 1 : 0;
     let shift = (_lshift + _rshift) > 0 ? 1 : 0;
-
-    // if (!Object.hasOwnProperty(KEYCODES, data.key)) {
-    //   return;
-    // }
 
     if (data.value == 0) {
       return;
@@ -316,7 +249,6 @@
     }
 
     // If fist char or char is different.
-    //lets sesss
     let record;
     const last_history = () => _history[_history.length - 1];
     let has_diff_char = () => (last_history().textual_symbol !== textual_symbol);
@@ -357,10 +289,7 @@
   function on_data(e) {
     // Since data is in string, parse first
     var data = JSON.parse(e.data);
-
     console.log(data)
-
-    // Show for browser source
     onKeyEvent(data);
   }
 

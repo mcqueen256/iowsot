@@ -57,6 +57,8 @@ async fn keyboard_event_listener(
             }
             use std::io::{self, Write};
             io::stdout().flush()?;
+
+            tx.lock().await.send((Key::KEY_FN, 0))?;
             continue;
         }
         println!("Event: key={key:?}, value={value}");
@@ -109,7 +111,6 @@ async fn timeout_disabler(
         tokio::select! {
             Ok(_key_event) = rx.recv() => {
                 // Key event received, will loop and create a new timeout
-                print!("*");
                 use std::io::Write;
                 std::io::stdout().flush().unwrap();
                 continue;
