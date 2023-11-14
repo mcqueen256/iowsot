@@ -16,54 +16,60 @@
       padding: 0;
     }
 
-    html {
-      height: 100%;
-      position: relative;
+    html,
+    body {
+      height: 100vh;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
     }
 
     body {
       font-family: Arial, Helvetica, sans-serif;
       font-family: "Mononoki Nerd Font Mono";
       font-size: 48px;
-      /* color: white; */
-      color: black;
-
-      position: absolute;
-      bottom: 0;
+      color: white;
+      text-shadow: 2px 2px #333333;
       overflow: hidden;
     }
+
 
     sup {
       font-size: 32px;
     }
 
+    div#container {
+      width: 100%;
+      display: flex;
+      justify-content: right;
+      flex-wrap: nowrap;
+    }
+
     div#history {
-      list-style-type: none;
-      overflow: hidden;
-    }
-
-    span.key {
-      display: inline-flex;
-      border-radius: 0.25em;
-      /* Override text height, otherwise it uses more vertical space and
-           keys with text in them are higher than ones with just icons. */
-      line-height: 1em;
-
-      padding: 0.25em;
-
-      background-color: rgba(0, 0, 0, 0.75);
       white-space: nowrap;
     }
 
-    span.key div {
-      display: inline-flex;
-      white-space: nowrap;
+    @keyframes flashRed {
+      0% {
+        color: red;
+      }
+
+      100% {
+        color: white;
+      }
+    }
+
+    .flashing-text {
+      animation: flashRed 1s ease-out;
+      animation-fill-mode: forwards;
     }
   </style>
 </head>
 
 <body>
-  <div id="history"></div>
+  <div id="container">
+    <div id="history"></div>
+  </div>
 </body>
 
 <script>
@@ -107,7 +113,7 @@
     "KEY_0": ["0", ")"],
     "KEY_MINUS": ["-", "_"],
     "KEY_EQUAL": ["=", "+"],
-    "KEY_BACKSPACE": "nf-md-keyboard_backspace",
+    "KEY_BACKSPACE": "nf-md-backspace",
     "KEY_TAB": "nf-md-keyboard_tab",
     "KEY_CAPSLOCK": "nf_md_keyboard_caps",
     "KEY_A": ["a", "A"],
@@ -246,7 +252,7 @@
     return el;
   }
 
-  var HISTORY_MAX = 10;
+  var HISTORY_MAX = 16;
 
   // #endregion
 
@@ -259,6 +265,13 @@
   var _history = [];
 
   function onKeyEvent(data) {
+
+    if (data.paused === true) {
+      // const body = document.body.setAttribute("class", "flashing-text");
+      console.log("what?");
+      return;
+    }
+
     if (data.key == 'KEY_LEFTSHIFT') {
       _lshift = data.value;
       return;
@@ -303,14 +316,19 @@
     }
 
     // If fist char or char is different.
+    //lets sesss
     let record;
-    if (_history.length === 0 || _history[_history.length - 1].textual_symbol !== textual_symbol) {
+    const last_history = () => _history[_history.length - 1];
+    let has_diff_char = () => (last_history().textual_symbol !== textual_symbol);
+    const has_diff_ctrl = () => (last_history().ctrl !== ctrl);
+    if (_history.length === 0 || has_diff_char() || has_diff_ctrl()) {
       record = {
         textual_symbol: textual_symbol,
         count: 1,
+        ctrl: ctrl,
         span: document.createElement("span")
       };
-      _historyDiv.prepend(record.span);
+      _historyDiv.append(record.span);
       _history.push(record);
     } else {
       record = _history[_history.length - 1];
@@ -320,17 +338,27 @@
     let counterHTML = "";
     let ctrlHTML = "";
     if (record.count > 1) {
-      counterHTML = `<sup><i class="nf nf-oct-x"></i>${record.count}</sup> `;
+      counterHTML = `<sup><i class="nf nf-oct-x"></i>${record.count}</sup>`;
     }
     if (ctrl) {
       ctrlHTML = `<sup><i class="nf nf-md-apple_keyboard_control" style="margin-left:0.2rem;"></i></sup>`;
+      style = 'border: 3px solid white; border-radius: 1rem;margin: 0.2rem; box-shadow: 2px 2px #333333;'
+      record.span.setAttribute("style", style);
     }
     record.span.innerHTML = `${ctrlHTML}${record.textual_symbol}${counterHTML}`;
+
+    while (_history.length > HISTORY_MAX) {
+      let head_record = _history.shift();
+      head_record.span.remove();
+    }
+
   }
 
   function on_data(e) {
     // Since data is in string, parse first
     var data = JSON.parse(e.data);
+
+    console.log(data)
 
     // Show for browser source
     onKeyEvent(data);
